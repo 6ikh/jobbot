@@ -19,7 +19,7 @@ on:
   # Cron format: minute hour day month weekday
   # "*/15 * * * *" means "every 15 minutes"
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
 
   # Also allow running manually from the GitHub Actions tab
   # This is useful for testing!
