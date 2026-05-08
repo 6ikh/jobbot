@@ -1,0 +1,73 @@
+# .github/workflows/job_alerts.yml
+#
+# This file tells GitHub Actions to run our job scraper automatically.
+# GitHub Actions is FREE for public repositories.
+# For private repos, you get 2,000 free minutes/month.
+#
+# HOW THIS WORKS:
+#   1. GitHub runs this workflow on a schedule (every 15 minutes)
+#   2. It sets up Python on a virtual machine
+#   3. It installs our dependencies
+#   4. It runs main.py
+#   5. It saves the updated seen_jobs.json back to the repo
+#      so we remember which jobs we've already posted
+
+name: Job Alert Scraper
+
+on:
+  # Run on a schedule — every 15 minutes
+  # Cron format: minute hour day month weekday
+  # "*/15 * * * *" means "every 15 minutes"
+  schedule:
+    - cron: "*/15 * * * *"
+
+  # Also allow running manually from the GitHub Actions tab
+  # This is useful for testing!
+  workflow_dispatch:
+
+jobs:
+  scrape-and-alert:
+    # Use GitHub's free Ubuntu runner
+    runs-on: ubuntu-latest
+
+    # Allow the workflow to commit seen_jobs.json back to the repo
+    permissions:
+      contents: write
+
+    steps:
+      # Step 1: Download our repository code onto the runner
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch the full git history so we can commit back
+          fetch-depth: 0
+
+      # Step 2: Set up Python
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          # Cache pip downloads so repeated runs are faster
+          cache: "pip"
+
+      # Step 3: Install our Python dependencies
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Step 4: Run the scraper
+      # The Discord webhook URL is stored as a GitHub Secret (never in code!)
+      - name: Run job scraper
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python main.py
+
+      # Step 5: Save the updated seen_jobs.json back to the repo
+      # This is critical for deduplication to persist between runs!
+      - name: Commit updated seen_jobs.json
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "GitHub Actions Bot"
+          git add seen_jobs.json
+          # Only commit if seen_jobs.json actually changed
+          git diff --staged --quiet || git commit -m "chore: update seen jobs [skip ci]"
+          git push
