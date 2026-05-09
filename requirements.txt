@@ -1,16 +1,12 @@
-# requirements.txt — Python packages needed for this project
-#
-# Install all of these by running:
-#   pip install -r requirements.txt
-
-# For making HTTP requests (fetching job data from APIs)
+# requirements.txt
+# Install with: pip install -r requirements.txt
+ 
+# Apify client — runs LinkedIn scraper on Apify's cloud
+apify-client==2.5.0
+ 
+# For sending Discord webhooks
 requests==2.31.0
-
-# For parsing HTML when scraping web pages
-beautifulsoup4==4.12.3
-
-# For parsing HTML (used by BeautifulSoup)
-lxml==5.1.0
-
-# For loading environment variables from a .env file (local development only)
+ 
+# For loading .env file when running locally
 python-dotenv==1.0.1
+ 
