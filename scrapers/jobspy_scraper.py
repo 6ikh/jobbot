@@ -1,6 +1,13 @@
 """
 scrapers/jobspy_scraper.py — Scrapes LinkedIn jobs using Apify.
-Actor: curious_coder/linkedin-jobs-scraper
+
+COST OPTIMIZATION:
+  Instead of calling Apify 17 times (once per search term), we now call it
+  ONCE with all 17 URLs in a single run. This eliminates 16 container startup
+  costs per scrape, reducing credit usage by ~90%.
+
+  Old approach: 17 runs × $0.01 startup + results = ~$0.17/scrape
+  New approach: 1 run  × $0.01 startup + results = ~$0.02/scrape
 """
 
 import os
@@ -42,8 +49,8 @@ def _build_linkedin_url(search_term: str) -> str:
 
 def scrape_all_jobs() -> list:
     """
-    Searches LinkedIn for every target job title via Apify.
-    Returns a list of standardized job dicts.
+    Sends ALL search URLs to Apify in a single run.
+    One container startup, one dataset, all results.
     """
     api_token = os.environ.get("APIFY_API_TOKEN", "")
     if not api_token:
@@ -57,91 +64,77 @@ def scrape_all_jobs() -> list:
         return []
 
     client = ApifyClient(api_token)
-    all_jobs = []
-    seen_urls = set()
 
-    log.info(f"🔗 Scraping LinkedIn via Apify for {len(TARGET_TITLES)} search terms...")
+    # Build ALL search URLs upfront
+    all_urls = [_build_linkedin_url(title) for title in TARGET_TITLES]
+    log.info(f"🔗 Sending {len(all_urls)} LinkedIn search URLs to Apify in ONE run...")
+    for i, (title, url) in enumerate(zip(TARGET_TITLES, all_urls)):
+        log.info(f"   [{i+1}] {title}")
 
-    for title in TARGET_TITLES:
-        log.info(f"   Searching: '{title}'")
+    # Single Apify call with all URLs
+    # total results = number of URLs × APIFY_RESULTS_PER_SEARCH
+    run_input = {
+        "urls": all_urls,                               # All 17 URLs at once
+        "count": APIFY_RESULTS_PER_SEARCH,              # Results per URL
+        "proxy": {
+            "useApifyProxy": True,
+            "apifyProxyGroups": ["RESIDENTIAL"],
+        },
+    }
 
-        jobs = _run_linkedin_search(client, title)
-        log.info(f"      Got {len(jobs)} parsed jobs")
-
-        for job in jobs:
-            url = job.get("url", "")
-            if url in seen_urls:
-                continue
-            if not _is_target_company(job.get("company", "")):
-                continue
-            seen_urls.add(url)
-            all_jobs.append(job)
-
-        time.sleep(2)
-
-    log.info(f"✅ Total LinkedIn jobs from target companies: {len(all_jobs)}")
-    return all_jobs
-
-
-def _run_linkedin_search(client, search_term: str) -> list:
-    """
-    Runs one LinkedIn search via Apify.
-    """
     try:
-        search_url = _build_linkedin_url(search_term)
-
-        run_input = {
-            "urls": [search_url],
-            "count": APIFY_RESULTS_PER_SEARCH,
-            "proxy": {
-                "useApifyProxy": True,
-                "apifyProxyGroups": ["RESIDENTIAL"],
-            },
-        }
-
         run = client.actor(LINKEDIN_ACTOR_ID).call(
             run_input=run_input,
-            timeout_secs=120,
+            timeout_secs=300,  # 5 min max — single run handles all searches
         )
 
         if not run:
-            log.warning(f"   No run object for '{search_term}'")
+            log.error("❌ Apify returned no run object")
             return []
 
         dataset_id = run.get("defaultDatasetId")
         if not dataset_id:
-            log.warning(f"   No dataset ID for '{search_term}'")
+            log.error("❌ No dataset ID returned from Apify")
             return []
 
         items = list(client.dataset(dataset_id).iterate_items())
-        log.info(f"      Raw dataset items: {len(items)}")
+        log.info(f"📦 Apify returned {len(items)} total raw results")
 
-        # Log the first item's keys so we can see the actual field names
+        # Log first item's field names so we can verify parsing
         if items:
-            log.info(f"      First item keys: {list(items[0].keys())}")
-            log.info(f"      First item sample: {dict(list(items[0].items())[:5])}")
-
-        jobs = []
-        for item in items:
-            job = _parse_apify_item(item)
-            if job:
-                jobs.append(job)
-
-        return jobs
+            log.info(f"   First item keys: {list(items[0].keys())}")
+            log.info(f"   First item sample: { {k: items[0][k] for k in list(items[0].keys())[:6]} }")
 
     except Exception as e:
-        log.error(f"   ❌ Apify error for '{search_term}': {e}")
+        log.error(f"❌ Apify run failed: {e}")
         return []
+
+    # Parse all results and filter by target company
+    all_jobs = []
+    seen_urls = set()
+
+    for item in items:
+        job = _parse_apify_item(item)
+        if not job:
+            continue
+        url = job.get("url", "")
+        if url in seen_urls:
+            continue
+        if not _is_target_company(job.get("company", "")):
+            continue
+        seen_urls.add(url)
+        all_jobs.append(job)
+
+    log.info(f"✅ {len(all_jobs)} jobs matched target companies (from {len(items)} total)")
+    return all_jobs
 
 
 def _parse_apify_item(item: dict) -> dict | None:
     """
     Converts a raw Apify result into our standardized job dict.
-    Tries multiple field name variations since different actor versions
-    use different field names.
+    Tries multiple field name variations.
     """
     try:
-        # Try all known field name variations for each field
         title = (
             item.get("title") or
             item.get("jobTitle") or
@@ -191,8 +184,7 @@ def _parse_apify_item(item: dict) -> dict | None:
         )
 
         if not title or not url:
-            # Log what we got so we can debug
-            log.debug(f"      Skipping item — missing title or url. Keys: {list(item.keys())}")
+            log.debug(f"Skipping — missing title/url. Keys: {list(item.keys())}")
             return None
 
         posted_date = _format_posted_date(posted_raw)
@@ -213,7 +205,7 @@ def _parse_apify_item(item: dict) -> dict | None:
         }
 
     except Exception as e:
-        log.error(f"Error parsing Apify item: {e}")
+        log.error(f"Error parsing item: {e}")
         return None
 
 
