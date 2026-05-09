@@ -9,7 +9,7 @@ Edit this file to change companies, job titles, or search settings.
 
 # How many results to fetch per job title search
 # Keep at 10-25 to stay within Apify free tier limits
-APIFY_RESULTS_PER_SEARCH = 15
+APIFY_RESULTS_PER_SEARCH = 10
 
 # Location to search within
 APIFY_LOCATION = "United States"
