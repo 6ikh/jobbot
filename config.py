@@ -1,163 +1,180 @@
 """
-config.py — All target companies, job titles, and filter keywords.
-Edit this file to add/remove companies or job titles.
+config.py — All settings for the Discord Job Alert System.
+Edit this file to change companies, job titles, or search settings.
 """
 
 # ─────────────────────────────────────────────
-# GREENHOUSE ATS COMPANIES
-# These companies use Greenhouse for hiring.
-# The key is the "board_token" used in their API URL.
-# Find it by visiting: https://boards.greenhouse.io/COMPANY_NAME
+# APIFY / LINKEDIN SEARCH SETTINGS
 # ─────────────────────────────────────────────
-GREENHOUSE_COMPANIES = {
-    # MedTech
-    "bostonscientifc": "Boston Scientific",
-    "stryker": "Stryker",
-    "medtronic": "Medtronic",
-    "abbott": "Abbott",
-    "bd": "Becton Dickinson",
+
+# How many results to fetch per job title search
+# Keep at 10-25 to stay within Apify free tier limits
+APIFY_RESULTS_PER_SEARCH = 15
+
+# Location to search within
+APIFY_LOCATION = "United States"
+
+# Job type filter
+# Options: "full-time", "part-time", "contract", "temporary", "internship", "" (all)
+APIFY_JOB_TYPE = "full-time"
+
+# Experience level filter — this is the key one for entry-level focus
+# Options: "internship", "entry_level", "associate", "mid_senior_level", "director", "" (all)
+# Use "entry_level,associate" to catch both entry-level and associate postings
+APIFY_EXPERIENCE_LEVEL = "entry_level,associate"
+
+
+# ─────────────────────────────────────────────
+# TARGET COMPANIES
+# Jobs will only be posted if the company matches one of these.
+# Matching is fuzzy — "Boston Scientific Corporation" matches "Boston Scientific"
+# ─────────────────────────────────────────────
+TARGET_COMPANIES_LIST = [
+    # MedTech / Medical Device
+    "Boston Scientific",
+    "Stryker",
+    "Medtronic",
+    "Zimmer Biomet",
+    "Abbott",
+    "Becton Dickinson",
+    "BD",
+    "Edwards Lifesciences",
+    "Baxter",
+    "Intuitive Surgical",
+    "Smith & Nephew",
 
     # Defense / Aerospace
-    "collins": "Collins Aerospace",
-    "l3harris": "L3Harris",
+    "Raytheon",
+    "RTX",
+    "Collins Aerospace",
+    "Lockheed Martin",
+    "Northrop Grumman",
+    "General Dynamics",
+    "L3Harris",
+    "Boeing",
+    "Honeywell",
 
     # Consumer Goods
-    "pepsico": "PepsiCo",
-    "kraftheinz": "Kraft Heinz",
-    "generalmills": "General Mills",
-    "mondelez": "Mondelez",
-    "colgatepalmolive": "Colgate-Palmolive",
+    "PepsiCo",
+    "Coca-Cola",
+    "Procter & Gamble",
+    "P&G",
+    "Unilever",
+    "Kraft Heinz",
+    "General Mills",
+    "Kellogg",
+    "Mondelez",
+    "Nestle",
+    "Colgate-Palmolive",
 
     # Tech / EV
-    "apple": "Apple",
-    "rivian": "Rivian",
-    "lucidmotors": "Lucid Motors",
+    "Tesla",
+    "Apple",
+    "Amazon",
+    "Google",
+    "Microsoft",
+    "Rivian",
+    "Lucid Motors",
+    "Ford",
+    "General Motors",
+    "GM",
+    "Stellantis",
 
     # Industrial
-    "3m": "3M",
-    "emerson": "Emerson Electric",
-    "parkerhannifin": "Parker Hannifin",
-    "eaton": "Eaton",
-    "rockwellautomation": "Rockwell Automation",
+    "GE",
+    "General Electric",
+    "3M",
+    "Caterpillar",
+    "Emerson Electric",
+    "Parker Hannifin",
+    "Eaton",
+    "Illinois Tool Works",
+    "ITW",
+    "Rockwell Automation",
+    "Siemens",
 
     # Consulting
-    "deloitte": "Deloitte",
-    "accenture": "Accenture",
-    "westmonroe": "West Monroe",
+    "Deloitte",
+    "KPMG",
+    "PwC",
+    "PricewaterhouseCoopers",
+    "EY",
+    "Ernst & Young",
+    "Accenture",
+    "McKinsey",
+    "BCG",
+    "Boston Consulting Group",
+    "Bain",
+    "Oliver Wyman",
+    "West Monroe",
+
+    # Cloud / Tech
+    "AWS",
+    "Amazon Web Services",
+    "Salesforce",
+    "Oracle",
+    "SAP",
+    "IBM",
 
     # Retail / Ecommerce
-    "nike": "Nike",
-    "underarmour": "Under Armour",
-}
-
-# ─────────────────────────────────────────────
-# LEVER ATS COMPANIES
-# These companies use Lever for hiring.
-# The key is the company slug used in their Lever URL.
-# Find it by visiting: https://jobs.lever.co/COMPANY_SLUG
-# ─────────────────────────────────────────────
-LEVER_COMPANIES = {
-    # Consulting
-    "mckinsey": "McKinsey",
-    "bain": "Bain",
-    "oliverwyman": "Oliver Wyman",
-
-    # Tech
-    "salesforce": "Salesforce",
-
-    # Retail
-    "costco": "Costco",
-}
-
-# ─────────────────────────────────────────────
-# WORKDAY COMPANIES
-# These companies use Workday for hiring.
-# Each entry needs a custom base URL.
-# ─────────────────────────────────────────────
-WORKDAY_COMPANIES = [
-    {
-        "name": "Tesla",
-        "url": "https://www.tesla.com/careers/search#/?",
-        "workday_id": "tesla",
-    },
-    {
-        "name": "Amazon",
-        "url": "https://www.amazon.jobs/en/search.json",
-        "workday_id": "amazon",
-    },
-    {
-        "name": "Walmart",
-        "url": "https://careers.walmart.com/results",
-        "workday_id": "walmart",
-    },
-    {
-        "name": "Boeing",
-        "url": "https://jobs.boeing.com/search-jobs",
-        "workday_id": "boeing",
-    },
-    {
-        "name": "Lockheed Martin",
-        "url": "https://www.lockheedmartinjobs.com/search-jobs",
-        "workday_id": "lockheedmartin",
-    },
+    "Walmart",
+    "Target",
+    "Home Depot",
+    "Costco",
+    "Nike",
+    "Under Armour",
 ]
+
 
 # ─────────────────────────────────────────────
 # TARGET JOB TITLES
-# Only jobs with these keywords in their title will be posted.
-# Matching is case-insensitive and partial (e.g. "analyst" matches "Supply Chain Analyst").
+# Apify will search LinkedIn for each of these one by one.
+# These are search queries — add "entry level" to get better results.
+# Fewer searches = less Apify credit usage.
 # ─────────────────────────────────────────────
 TARGET_TITLES = [
-    # People-Facing / Sales
-    "commercial leadership development",
-    "sales leadership development",
-    "business development associate",
-    "client services associate",
-    "implementation consultant",
-
     # Supply Chain / Operations
     "supply chain analyst",
     "procurement analyst",
-    "sourcing analyst",
     "operations analyst",
     "demand planning analyst",
-    "supply chain leadership development",
-    "operations leadership development",
     "logistics analyst",
-    "vendor management analyst",
     "strategic sourcing analyst",
+    "vendor management analyst",
+
+    # Leadership Development Programs
+    "supply chain leadership development program",
+    "operations leadership development program",
+    "commercial leadership development program",
+    "sales leadership development program",
 
     # Program / Project Management
     "associate program manager",
     "project coordinator",
-    "operations program manager",
-    "technical program manager associate",
-    "pmo analyst",
+    "PMO analyst",
 
     # Consulting / Strategy
     "associate consultant",
     "business analyst",
-    "operations consultant",
-    "supply chain consultant",
-    "strategy & operations associate",
-    "strategy and operations associate",
+    "strategy operations associate",
 ]
+
 
 # ─────────────────────────────────────────────
 # EXCLUSION KEYWORDS
-# Jobs with ANY of these in the title will be skipped.
+# Jobs with ANY of these words in the title are skipped.
+# Uses word-boundary matching — "lead" won't block "leadership"
 # ─────────────────────────────────────────────
 EXCLUDE_TITLE_KEYWORDS = [
     "senior",
-    " sr ",
-    "sr.",
+    "sr",
     "staff",
     "principal",
     "director",
     "manager",
-    " lead",
+    "lead",
     "architect",
-    "vp ",
+    "vp",
     "vice president",
     "head of",
 ]
