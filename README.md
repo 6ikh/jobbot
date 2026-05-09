@@ -1,5 +1,5 @@
 # 🚨 Discord Job Alert System
-> Automatically scrapes entry-level jobs from 60+ top companies and posts them to Discord — completely FREE, runs every 15 minutes.
+> Automatically scrapes entry-level jobs from LinkedIn and posts them to Discord — completely FREE, runs every 5 minutes.
 
 ---
 
@@ -8,30 +8,23 @@
 2. [Example Discord Alert](#example-discord-alert)
 3. [How It Works](#how-it-works)
 4. [Folder Structure](#folder-structure)
-5. [Setup Guide (Step by Step)](#setup-guide)
-   - Step 1: Install Python
-   - Step 2: Create GitHub Repository
-   - Step 3: Set Up Discord Webhook
-   - Step 4: Add GitHub Secret
-   - Step 5: Enable GitHub Actions
-   - Step 6: Test Locally (Optional)
+5. [Setup Guide](#setup-guide)
 6. [Adding More Companies](#adding-more-companies)
 7. [Adding More Job Titles](#adding-more-job-titles)
 8. [Troubleshooting](#troubleshooting)
-9. [Future Improvements](#future-improvements)
+9. [Tech Stack](#tech-stack)
 
 ---
 
 ## What This Does
 
-This system:
-- ✅ Scrapes job postings from **Greenhouse**, **Lever**, and **Workday** ATS platforms
-- ✅ Filters for only entry-level roles at target companies
-- ✅ Skips senior/manager/director roles automatically
-- ✅ Never reposts the same job twice (deduplication)
-- ✅ Sends alerts to a Discord channel automatically
-- ✅ Runs every 15 minutes using GitHub Actions
-- ✅ Costs **$0** — uses only free tools
+- ✅ Scrapes **LinkedIn** job postings via Apify (bypasses LinkedIn's IP blocks)
+- ✅ Filters for only entry-level + associate roles at 78 target companies
+- ✅ Skips senior / manager / director / lead roles automatically
+- ✅ Never reposts the same job twice (deduplication via `seen_jobs.json`)
+- ✅ Sends formatted alerts to a Discord channel automatically
+- ✅ Runs every 5 minutes using GitHub Actions
+- ✅ Costs **$0** — Apify free tier covers the usage
 
 ---
 
@@ -44,12 +37,12 @@ Company: Tesla
 Job Title: Supply Chain Analyst
 Location: Austin, TX
 Experience Level: Entry Level
-Pay: Not listed
-Posted: May 7, 2026
+Pay: $65,000/yr
+Posted: 2 days ago
 Apply By: Not listed
 
 Apply:
-https://tesla.wd1.myworkdayjobs.com/Tesla_External/job/Austin-TX/Supply-Chain-Analyst_R12345
+https://www.linkedin.com/jobs/view/123456789
 ```
 
 ---
@@ -57,20 +50,24 @@ https://tesla.wd1.myworkdayjobs.com/Tesla_External/job/Austin-TX/Supply-Chain-An
 ## How It Works
 
 ```
-GitHub Actions (every 15 min)
+GitHub Actions (every 5 minutes)
         ↓
     main.py runs
         ↓
-Scrapes Greenhouse + Lever + Workday APIs
+For each of 17 job title searches:
+  → Builds a LinkedIn search URL with entry-level filter
+  → Sends URL to Apify (runs on residential IP — LinkedIn can't block it)
+  → Apify scrapes LinkedIn and returns job results
         ↓
+Filters by target company name (78 companies)
 Filters by job title keywords
-Removes senior/manager/etc.
+Removes senior/manager/lead/director jobs
         ↓
-Checks seen_jobs.json (skips already-posted jobs)
+Checks seen_jobs.json — skips already-posted jobs
         ↓
 Sends new jobs to Discord via webhook
         ↓
-Updates seen_jobs.json and commits it back to GitHub
+Updates seen_jobs.json → commits back to GitHub
 ```
 
 ---
@@ -78,275 +75,155 @@ Updates seen_jobs.json and commits it back to GitHub
 ## Folder Structure
 
 ```
-discord-job-alerts/
+jobbot/
 │
-├── main.py                    # Entry point — runs everything
-├── config.py                  # All your companies, titles, and filters
-├── requirements.txt           # Python packages to install
-├── seen_jobs.json             # Tracks jobs already posted (auto-updated)
-├── .env.example               # Template for local environment variables
-├── .gitignore                 # Files NOT to commit to GitHub
+├── main.py                        # Entry point — runs everything
+├── config.py                      # Companies, job titles, Apify settings
+├── requirements.txt               # Python packages (apify-client, requests)
+├── seen_jobs.json                 # Tracks posted jobs (auto-updated by Actions)
+├── .env.example                   # Template for local development
+├── .gitignore
 │
 ├── scrapers/
 │   ├── __init__.py
-│   ├── greenhouse.py          # Scrapes Greenhouse ATS companies
-│   ├── lever.py               # Scrapes Lever ATS companies
-│   └── workday.py             # Scrapes Workday ATS companies
+│   └── jobspy_scraper.py          # Apify/LinkedIn scraper
 │
 ├── utils/
 │   ├── __init__.py
-│   ├── deduplication.py       # Loads/saves seen_jobs.json
-│   ├── discord.py             # Sends messages to Discord webhook
-│   └── filters.py             # Filters jobs by title/level
+│   ├── deduplication.py           # Loads/saves seen_jobs.json
+│   ├── discord.py                 # Formats and sends Discord messages
+│   └── filters.py                 # Filters jobs by title and exclusion keywords
 │
 └── .github/
     └── workflows/
-        └── job_alerts.yml     # GitHub Actions automation schedule
+        └── job_alerts.yml         # GitHub Actions — runs every 5 minutes
 ```
 
 ---
 
 ## Setup Guide
 
-### ✅ Step 1: Install Python
+### ✅ Step 1: GitHub Repository
+Your repo is already set up. All files should be at the root level (not inside a subfolder), with `utils/` and `scrapers/` as subfolders.
 
-**Windows:**
-1. Go to https://python.org/downloads
-2. Download Python 3.11 or newer
-3. Run the installer
-4. ⚠️ IMPORTANT: Check "Add Python to PATH" during installation
-5. Open Command Prompt and verify: `python --version`
+---
 
-**Mac:**
-1. Open Terminal
-2. Run: `brew install python` (if you have Homebrew)
-   OR download from https://python.org/downloads
-3. Verify: `python3 --version`
+### ✅ Step 2: Discord Webhook
+1. Open Discord → go to the channel you want alerts in
+2. Click the ⚙️ gear (Edit Channel) → **Integrations** → **Webhooks** → **New Webhook**
+3. Name it "Job Alert Bot" → click **Copy Webhook URL**
+4. Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+   - Name: `DISCORD_WEBHOOK_URL`
+   - Value: paste your webhook URL
 
-**Linux (Ubuntu/Debian):**
+---
+
+### ✅ Step 3: Apify Account (Free)
+Apify is used to scrape LinkedIn without getting blocked. GitHub Actions servers have datacenter IPs that LinkedIn blocks — Apify routes through residential IPs instead.
+
+1. Go to **https://apify.com** → Sign Up Free (no credit card needed)
+2. Verify your email
+3. Go to **https://console.apify.com/account/integrations**
+4. Copy your **Personal API token**
+5. Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+   - Name: `APIFY_API_TOKEN`
+   - Value: paste your token
+
+**Apify free tier:** $5 of credits per month, resets monthly. Each LinkedIn search costs roughly $0.01–0.05. At 17 searches per run, every 5 minutes, you'll use well under $5/month.
+
+---
+
+### ✅ Step 4: Run It
+1. Go to your GitHub repo → **Actions** tab
+2. Click **Job Alert Scraper** in the left sidebar
+3. Click **Run workflow** → **Run workflow**
+4. Each run takes about 10–15 minutes (17 Apify searches × ~45 seconds each)
+5. Check your Discord channel for alerts
+
+---
+
+### ✅ Step 5: Local Testing (Optional)
 ```bash
-sudo apt update && sudo apt install python3 python3-pip -y
-python3 --version
-```
+# Clone your repo
+git clone https://github.com/YOUR_USERNAME/jobbot.git
+cd jobbot
 
----
-
-### ✅ Step 2: Create a GitHub Repository
-
-1. Go to https://github.com and create a free account if you don't have one
-2. Click the **+** button → **New repository**
-3. Name it `discord-job-alerts`
-4. Set it to **Public** (required for unlimited free GitHub Actions minutes)
-   - Private repos get 2,000 free minutes/month (still plenty)
-5. Click **Create repository**
-6. Upload all the files from this project to your repo
-
-**To upload files:**
-```bash
-# Option A: Using Git (recommended)
-git clone https://github.com/YOUR_USERNAME/discord-job-alerts.git
-cd discord-job-alerts
-# Copy all the project files into this folder
-git add .
-git commit -m "Initial commit"
-git push
-
-# Option B: Use GitHub's web interface
-# Click "uploading an existing file" on your repo page
-# Drag and drop all the files
-```
-
----
-
-### ✅ Step 3: Create a Discord Webhook
-
-1. Open **Discord** (desktop or browser)
-2. Go to the **server** where you want job alerts
-3. Right-click the **channel** you want alerts in → **Edit Channel**
-4. Click **Integrations** in the left sidebar
-5. Click **Webhooks** → **New Webhook**
-6. Give it a name like "Job Alert Bot"
-7. Click **Copy Webhook URL**
-8. Save this URL — you'll need it in the next step
-
-> ⚠️ **KEEP THIS URL SECRET!** Anyone with this URL can post to your channel.
-
----
-
-### ✅ Step 4: Add the Webhook URL as a GitHub Secret
-
-We store the webhook URL as a GitHub Secret so it's never visible in your code.
-
-1. Go to your GitHub repository
-2. Click **Settings** (top menu)
-3. Click **Secrets and variables** → **Actions** (left sidebar)
-4. Click **New repository secret**
-5. Name: `DISCORD_WEBHOOK_URL`
-6. Value: Paste your Discord webhook URL
-7. Click **Add secret**
-
----
-
-### ✅ Step 5: Enable GitHub Actions
-
-1. Go to your GitHub repository
-2. Click the **Actions** tab
-3. If prompted, click **I understand my workflows, go ahead and enable them**
-4. You should see your workflow listed as "Job Alert Scraper"
-
-**To test it immediately:**
-1. Click on "Job Alert Scraper"
-2. Click **Run workflow** → **Run workflow**
-3. Watch it run! It should take about 1-2 minutes.
-4. Check your Discord channel for job alerts.
-
----
-
-### ✅ Step 6: Test Locally (Optional but Recommended)
-
-Testing locally lets you see exactly what's happening before relying on GitHub.
-
-```bash
-# 1. Navigate to the project folder
-cd discord-job-alerts
-
-# 2. Create a virtual environment (keeps packages isolated)
+# Create virtual environment
 python -m venv venv
+source venv/bin/activate        # Mac/Linux
+venv\Scripts\activate           # Windows
 
-# 3. Activate the virtual environment
-# On Windows:
-venv\Scripts\activate
-# On Mac/Linux:
-source venv/bin/activate
-
-# 4. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# 5. Set up your environment variables
+# Set up environment variables
 cp .env.example .env
-# Open .env in a text editor and fill in your Discord webhook URL
+# Edit .env and fill in DISCORD_WEBHOOK_URL and APIFY_API_TOKEN
 
-# 6. Run the scraper
+# Run
 python main.py
-```
-
-You should see output like:
-```
-2026-05-07 14:30:00 [INFO] 🚀 Starting Discord Job Alert System...
-2026-05-07 14:30:00 [INFO] 📋 Loaded 0 previously seen jobs
-2026-05-07 14:30:01 [INFO] 🌿 Scraping Greenhouse: Boston Scientific
-2026-05-07 14:30:02 [INFO]    Found 3 jobs at Boston Scientific
-...
-2026-05-07 14:30:45 [INFO] 🎉 Done! Posted 7 new jobs.
 ```
 
 ---
 
 ## Adding More Companies
 
-### Adding a Greenhouse Company:
-1. Find the company's Greenhouse board token:
-   - Visit: `https://boards.greenhouse.io/COMPANY_NAME`
-   - The slug in the URL is the token
-2. Open `config.py`
-3. Add to `GREENHOUSE_COMPANIES`:
+Open `config.py` and add to `TARGET_COMPANIES_LIST`:
+
 ```python
-GREENHOUSE_COMPANIES = {
+TARGET_COMPANIES_LIST = [
     ...
-    "newcompany": "New Company Name",  # Add this line
-}
+    "New Company Name",    # Add this line
+]
 ```
 
-### Adding a Lever Company:
-1. Find the slug: visit `https://jobs.lever.co/COMPANY_SLUG`
-2. Add to `LEVER_COMPANIES` in `config.py`:
-```python
-LEVER_COMPANIES = {
-    ...
-    "newslug": "New Company Name",  # Add this line
-}
-```
-
-### Adding a Workday Company:
-1. Find the Workday tenant: look for `TENANT.wd1.myworkdayjobs.com` in the URL
-2. Add to `WORKDAY_TENANTS` in `scrapers/workday.py`:
-```python
-WORKDAY_TENANTS = {
-    ...
-    "New Company": ("tenant_name", "job_site_name"),  # Add this line
-}
-```
+Matching is fuzzy — `"Boston Scientific"` will match `"Boston Scientific Corporation"`.
 
 ---
 
 ## Adding More Job Titles
 
-Open `config.py` and add keywords to `TARGET_TITLES`:
+Open `config.py` and add to `TARGET_TITLES`:
 
 ```python
 TARGET_TITLES = [
     ...
-    "your new job title here",  # Will match any title containing this phrase
+    "new job title here",    # Apify will search LinkedIn for this
 ]
 ```
 
-Matching is case-insensitive and partial, so `"analyst"` would match:
-- "Supply Chain Analyst"
-- "Data Analyst"  
-- "Senior Analyst" ← but this would be caught by EXCLUDE_TITLE_KEYWORDS
+Note: each title = one Apify search = ~$0.01–0.05 of credits. Keep the list focused.
 
 ---
 
 ## Troubleshooting
 
-**❓ No jobs are showing up in Discord**
-- Check that `DISCORD_WEBHOOK_URL` is set correctly in GitHub Secrets
-- Run the workflow manually (Actions tab → Run workflow)
-- Check the workflow logs for error messages
+**❓ Nothing showing in Discord**
+- Check Actions logs → expand "Run job scraper" → look for errors
+- Verify both `DISCORD_WEBHOOK_URL` and `APIFY_API_TOKEN` are in GitHub Secrets
+- Check `seen_jobs.json` — if it has IDs, jobs were found but already posted previously
 
-**❓ "404 Not Found" for a company**
-- The company may have changed their ATS or board token
-- Try visiting their career page directly to find the new URL
+**❓ "APIFY_API_TOKEN is not set"**
+- The secret name must be exactly `APIFY_API_TOKEN` (all caps, underscores)
 
-**❓ "403 Forbidden" for Workday companies**
-- That company's Workday site blocks automated requests
-- These companies need Playwright-based scraping (future improvement)
+**❓ "Got 0 raw results" for every search**
+- This means Apify ran successfully but returned no data — likely a field name mismatch
+- Check the logs for `First item keys:` line which shows the actual field names returned
+- Share those logs for a fix
 
-**❓ Same jobs keep getting posted**
-- Make sure the GitHub Actions workflow is committing `seen_jobs.json`
-- Check that the workflow has `permissions: contents: write`
-- Look at your repo to confirm `seen_jobs.json` is being updated
+**❓ Run takes too long / times out**
+- Reduce `APIFY_RESULTS_PER_SEARCH` in `config.py` from 15 to 10
+- Reduce `TARGET_TITLES` list length
+- GitHub Actions has a 6-hour job timeout so it won't be killed, just slow
 
-**❓ GitHub Actions isn't running every 15 minutes**
-- GitHub may delay scheduled workflows by up to 15-30 minutes when servers are busy
-- This is normal — the schedule is not guaranteed to be exactly on time
+**❓ Apify credits running out**
+- Reduce `APIFY_RESULTS_PER_SEARCH` in `config.py`
+- Change the schedule in `job_alerts.yml` from `*/5` to `*/15` (every 15 min)
+- Remove less important titles from `TARGET_TITLES`
 
----
-
-## Future Improvements
-
-When you're ready to scale up, here's what to add next:
-
-1. **Playwright scraping** — for companies that block `requests`
-   ```bash
-   pip install playwright
-   playwright install chromium
-   ```
-
-2. **Multiple Discord channels** — send different job categories to different channels
-   - Add `DISCORD_WEBHOOK_URL_SUPPLY_CHAIN`, `DISCORD_WEBHOOK_URL_CONSULTING`, etc.
-
-3. **Email alerts** — send a daily digest email using Python's `smtplib` (free with Gmail)
-
-4. **Location filtering** — only show jobs in specific cities or states
-
-5. **Indeed / LinkedIn scraping** — much harder due to anti-bot measures, but possible
-
-6. **Google Sheets logging** — log every job to a spreadsheet using `gspread`
-
-7. **Salary filtering** — only show jobs above a minimum pay threshold
-
-8. **Slack alerts** — same webhook concept works for Slack too
+**❓ Jobs from wrong companies showing up**
+- The company filter is fuzzy — `"target"` matches both Target (retail) and any company with "target" in its name
+- Make company names more specific in `TARGET_COMPANIES_LIST` if needed
 
 ---
 
@@ -355,15 +232,40 @@ When you're ready to scale up, here's what to add next:
 | Tool | Purpose | Cost |
 |------|---------|------|
 | Python | Programming language | Free |
-| requests | HTTP requests to job APIs | Free |
-| BeautifulSoup | HTML parsing | Free |
-| Discord Webhooks | Sending alerts to Discord | Free |
+| apify-client | Calls Apify API to run LinkedIn scraper | Free |
+| Apify | Scrapes LinkedIn using residential IPs | Free ($5/mo credit) |
+| curious_coder/linkedin-jobs-scraper | The Apify actor that does the actual scraping | Free |
+| Discord Webhooks | Posts job alerts to Discord | Free |
 | GitHub | Code hosting | Free |
-| GitHub Actions | Automated scheduling | Free (public repos) |
-| JSON file | Job deduplication storage | Free |
+| GitHub Actions | Runs scraper every 5 minutes automatically | Free |
+| seen_jobs.json | Deduplication — tracks already-posted jobs | Free |
 
 **Total monthly cost: $0.00** 🎉
 
 ---
 
-*Built with ❤️ for entry-level job seekers*
+## How Deduplication Works
+
+Every time a job is posted to Discord, its unique ID (based on the LinkedIn URL) is saved to `seen_jobs.json`. On the next run, any job whose ID is already in that file is skipped entirely — it will never be posted again even if LinkedIn keeps showing it in search results.
+
+GitHub Actions automatically commits the updated `seen_jobs.json` back to your repo after every run, so the deduplication persists across all future runs.
+
+---
+
+## Changing the Schedule
+
+Edit `.github/workflows/job_alerts.yml`:
+
+```yaml
+schedule:
+  - cron: "*/5 * * * *"    # every 5 minutes (current)
+  - cron: "*/15 * * * *"   # every 15 minutes
+  - cron: "0 * * * *"      # every hour
+  - cron: "0 9 * * *"      # once daily at 9am UTC
+```
+
+Note: GitHub's minimum is 5 minutes. Scheduled runs may be delayed 5–15 min when GitHub servers are busy.
+
+---
+
+*Built for entry-level job seekers — good luck out there* 🎯
